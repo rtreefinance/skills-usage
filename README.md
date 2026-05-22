@@ -212,18 +212,95 @@
 ---
 
 ### ecc
-**来源：** `affaan-m/ECC`
+**来源：** `affaan-m/ECC` | **版本：** 2.0.0-rc.1
 
-**用途：** 超大型开发 operator 层，包含 60 个 Agent、232 个 Skills，覆盖项目全生命周期：需求分析、架构设计、编码、测试、部署、文档。
+**用途：** 生产级 AI 编码插件，内置 60 个专项 Agent、232 个 Skills、75 个命令，覆盖软件开发全生命周期。安装后 Claude 会**主动**在合适时机调用对应 Agent，无需每次手动触发。
 
-**什么时候用：**
-- 大型项目需要系统化的工程方法论
-- 需要专项 Agent 处理特定领域任务（安全、性能、合规等）
+---
 
-**如何触发：**
+#### 自动触发规则（Claude 主动调用）
+
+| 场景 | 自动调用的 Agent |
+|------|----------------|
+| 收到复杂功能请求 | `planner` |
+| 刚写完或修改了代码 | `code-reviewer` |
+| 修 bug 或开发新功能 | `tdd-guide` |
+| 需要做架构决策 | `architect` |
+| 涉及安全敏感代码 | `security-reviewer` |
+| 运行自主循环任务 | `loop-operator` |
+
+---
+
+#### 专项 Agent 完整列表（60 个，按领域分）
+
+**核心开发流程：**
+
+| 说法 / 场景 | Agent |
+|-------------|-------|
+| "帮我规划这个功能" / 复杂功能、重构 | `planner` |
+| "设计一下系统架构" / 架构决策 | `architect` |
+| "用 TDD 方式实现" / 新功能或 bug 修复 | `tdd-guide` |
+| "review 一下这段代码" | `code-reviewer` |
+| "检查安全漏洞" / 提交前、敏感代码 | `security-reviewer` |
+| "build 挂了帮我看看" | `build-error-resolver` |
+| "清理死代码 / 重构" | `refactor-cleaner` |
+| "更新文档" | `doc-updater` |
+| "跑 E2E 测试" | `e2e-runner` |
+| "查 API 文档" | `docs-lookup` |
+
+**语言专项 reviewer：**
+
+| 语言 | Reviewer Agent | Build Resolver |
+|------|---------------|----------------|
+| TypeScript / JavaScript | `typescript-reviewer` | — |
+| Python | `python-reviewer` | — |
+| Go | `go-reviewer` | `go-build-resolver` |
+| Rust | `rust-reviewer` | `rust-build-resolver` |
+| Java / Spring Boot | `java-reviewer` | `java-build-resolver` |
+| Kotlin / Android | `kotlin-reviewer` | `kotlin-build-resolver` |
+| C / C++ | `cpp-reviewer` | `cpp-build-resolver` |
+| F# | `fsharp-reviewer` | — |
+| Django | `django-reviewer` | `django-build-resolver` |
+| ML / PyTorch | `mle-reviewer` | `pytorch-build-resolver` |
+| PostgreSQL / Supabase | `database-reviewer` | — |
+
+**自主运行类：**
+
+| 说法 / 场景 | Agent |
+|-------------|-------|
+| 自主循环任务监控 | `loop-operator` |
+| 调优 harness 配置 | `harness-optimizer` |
+
+---
+
+#### Slash Commands（3 个）
+
+| 命令 | 用途 | 用法示例 |
+|------|------|---------|
+| `/feature-development` | 标准功能开发工作流：理解现状 → 最小化改动 → 验证 → 总结 | "用 feature-development 流程实现这个功能" |
+| `/database-migration` | 数据库 schema 变更工作流：创建迁移文件 → 更新 schema → 生成类型 | "按 database-migration 流程做这次 schema 变更" |
+| `/add-language-rules` | 为项目新增编程语言规范（coding-style、hooks、patterns、security、testing） | "给项目添加 Python 语言规范" |
+
+---
+
+#### 核心编码原则（ECC 强制要求）
+
+- **TDD 强制**：先写测试（RED）→ 最小实现（GREEN）→ 重构（80%+ 覆盖率）
+- **不可变性**：永远创建新对象，不修改现有对象
+- **安全优先**：提交前必须检查 secrets、SQL 注入、XSS、CSRF
+- **文件大小**：单文件 200-400 行，上限 800 行，函数 < 50 行
+- **Conventional Commits**：`feat:`、`fix:`、`refactor:`、`docs:`、`test:`、`chore:`
+
+---
+
+#### 开发工作流（ECC 推荐顺序）
+
 ```
-"用 ECC 工作流开始这个项目"
-"对这个项目做架构评审"
+1. planner     → 规划，识别依赖和风险，拆分阶段
+2. tdd-guide   → 先写测试，再实现，再重构
+3. code-reviewer → 立即 review，处理 CRITICAL/HIGH 问题
+4. security-reviewer → 提交前安全检查
+5. commit      → conventional commits 格式 + 完整 PR 摘要
 ```
 
 ---
