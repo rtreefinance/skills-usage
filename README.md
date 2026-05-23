@@ -1,6 +1,6 @@
 # Claude Code Skills 使用手册
 
-> 最后更新：2026-05-22 | 共 29 个 Skills（12 Plugin + 17 Slash Command）
+> 最后更新：2026-05-23 | 共 29 个 Skills（12 Plugin + 17 Slash Command）
 
 ---
 
@@ -15,18 +15,18 @@
 | 金融建模、估值、行业分析 | [financial-analysis](#financial-analysis) |
 | 让 Claude 记住跨会话的上下文 | [agentmemory](#agentmemory) |
 | 整理 Obsidian 笔记 | [obsidian](#obsidian) |
-| 强制用最简单的方案解决问题 | [caveman](#caveman) |
+| 压缩回复长度，减少 token 消耗 | [caveman](#caveman) |
 | 把任务计划写进文件追踪进度 | [planning-with-files](#planning-with-files) |
 | 大型项目全生命周期管理 | [ecc](#ecc) |
 | 监控 token 用量和会话状态 | [claude-hud](#claude-hud) |
-| 让 Codex 协助审查或执行任务 | [codex](#codex) |
+| 把任务委派给 Codex CLI 执行 | [codex](#codex) |
 | 搜索发现新 Skill | [/find-skills](#find-skills) |
 | 从代码文件生成编码规范 | [/write-coding-standards-from-file](#write-coding-standards-from-file) |
 | 操控浏览器（本机） | [/browser-use](#browser-use) |
 | 操控浏览器（云端/CI） | [/browser-use-cloud](#browser-use-cloud--browser-use-remote-browser) |
 | 用 Python 写浏览器自动化代码 | [/browser-use-open-source](#browser-use-open-source) |
 | 生成 Excalidraw 图表 | [/excalidraw](#excalidraw) |
-| 整理内容给 NotebookLM | [/notebooklm](#notebooklm) |
+| 浏览器自动化操控 NotebookLM | [/notebooklm](#notebooklm) |
 | 把 AI 文字改写得更自然 | [/humanizer](#humanizer) |
 | 生成 PowerPoint 文件 | [/pptx](#pptx) |
 | 分析代码依赖图 / 重构 | [/crg-*](#code-review-graph) |
@@ -68,18 +68,27 @@
 ### code-review
 **来源：** `anthropics/claude-plugins-official`
 
-**用途：** 多个专项 Agent 协作对 PR 进行全面审查，输出置信度评分和改进建议。
+**用途：** 启动多个并行 Agent 从不同维度审查 PR，用置信度分数（0-100）过滤误报，≥80 的问题才会评论到 PR。
 
-**什么时候用：**
-- 提交 PR 之前想自查一遍
-- 想检查安全漏洞、性能问题、代码规范问题
+**实际工作流：**
+1. **Haiku 预检**：PR 是否关闭/草稿/已审查/不需要审查
+2. **5 个 Sonnet Agent 并行独立审查：**
+   - Agent 1：CLAUDE.md 合规检查
+   - Agent 2：浅层 bug 扫描（仅看变更行）
+   - Agent 3：`git blame` + 历史上下文中的 bug
+   - Agent 4：历史 PR 评论中的相关问题
+   - Agent 5：代码注释的合规性
+3. **Haiku 置信度评分**（0/25/50/75/100），过滤 <80 分的误报
+4. **`gh` 命令评论**到 PR，附带完整 SHA 文件链接
 
 **如何触发：**
 ```
 "帮我 review 这个 PR"
 "审查一下当前的代码改动"
-"这段代码有没有安全问题"
+/code-review <PR号>
 ```
+
+**注意：** 不检查 build/type-check（由 CI 负责），不留 emoji，评论简短。
 
 ---
 
@@ -103,7 +112,13 @@
 ### frontend-design
 **来源：** `anthropics/claude-plugins-official`
 
-**用途：** 生产级前端 UI 实现，具备高设计标准，输出的界面美观且规范。
+**用途：** 生产级前端 UI 实现，在写代码之前先确立**大胆的设计方向**，避免输出千篇一律的"AI 味"界面。
+
+**核心理念：**
+- **方向先于代码**：在实现前选定设计风格（极简主义/野兽派/极大化/企业风…），不接受"视主题而定"的模糊回答
+- **刻意出人意料**：排版、颜色、间距有意选择意外之选，每个决策都要有创意理由
+- **拒绝 AI Slop 特征**：不用 Inter/Roboto 字体，不用紫色渐变，不用空洞 placeholder，不用圆角 card + 漂浮阴影
+- **风格一致**：全页面提交一种审美，不做折中
 
 **什么时候用：**
 - 实现页面布局、UI 组件
@@ -115,6 +130,7 @@
 "帮我实现这个页面的 UI"
 "参考这个设计稿，写出对应的组件"
 "优化一下这个按钮/卡片/表单的样式"
+"做一个有独特风格的登录页"
 ```
 
 ---
@@ -144,31 +160,77 @@
 ### agentmemory
 **来源：** `rohitg00/agentmemory` | **版本：** 0.9.21
 
-**用途：** 为 Claude 提供跨会话持久记忆，自动记录工具使用和关键上下文，下次打开会话时仍能记住。
+**用途：** 为 Claude 提供跨会话持久记忆，使用 `memory_save` 和 `memory_smart_search` MCP 工具主动存储和检索记忆。
 
 **什么时候用：**
 - 长期持续的项目，不想每次重新交代背景
 - 希望 Claude 记住你的偏好和决策习惯
+- 多会话任务需要传递上下文
 
-**如何触发：** 自动运行，无需手动调用。Claude 会在后台捕获和压缩记忆。
+**如何触发（两种方式）：**
+
+**方式一：显式命令**
+```
+/remember 我们决定用 PostgreSQL 而不是 MongoDB，原因是查询复杂度
+→ 调用 memory_save 工具存储
+
+/recall 上次我们选的数据库是什么
+→ 调用 memory_smart_search 检索
+```
+
+**方式二：自然语言**
+```
+"记住我们今天的架构决策"
+"帮我保存一下这个 API Key 的用途"
+"你还记得上次我们讨论的认证方案吗"
+```
+
+**包含子技能：**
+- `remember`：显式存储记忆
+- `recall`：检索记忆
+- `commit-context`：提交时自动保存上下文
+- `handoff`：会话交接时总结当前状态
+- `recap`：回顾历史记忆摘要
 
 ---
 
 ### obsidian
 **来源：** `kepano/obsidian-skills` | **版本：** 1.0.1
 
-**用途：** 专为 Obsidian 知识库设计，帮助管理笔记、双链和知识图谱。
+**用途：** 通过 `obsidian` CLI 直接操作 Obsidian vault，管理笔记、双链、日记、标签、任务等。
 
-**什么时候用：**
-- 整理 Obsidian vault 的笔记结构
-- 生成笔记模板
-- 查找和维护笔记之间的链接关系
+**前提：** 必须已安装 `obsidian` CLI，且 Obsidian 应用正在运行。
+
+**笔记操作命令：**
+```bash
+obsidian read "Note Title"                    # 读取笔记内容
+obsidian create "Note Title" "内容"           # 新建笔记
+obsidian append "Note Title" "追加内容"       # 向笔记末尾追加
+obsidian search "关键词"                      # 搜索 vault
+
+obsidian daily:read                           # 读取今天的日记
+obsidian daily:append "今天完成了..."          # 向今日日记追加内容
+
+obsidian property:set "Note" "status" "done"  # 设置 frontmatter 属性
+obsidian tasks "Note Title"                   # 列出笔记中的任务
+obsidian tags "Note Title"                    # 列出标签
+obsidian backlinks "Note Title"               # 查看反向链接
+```
+
+**插件开发支持：**
+```bash
+obsidian plugin:reload "plugin-id"            # 热重载插件
+obsidian dev:errors                           # 查看开发者控制台错误
+obsidian dev:screenshot                       # 截图当前 Obsidian 界面
+obsidian eval "console.log('hello')"          # 在 Obsidian 环境执行 JS
+```
 
 **如何触发：**
 ```
-"在 Obsidian 里创建一个新笔记"
-"整理一下我的笔记双链"
-"生成一个 [主题] 的笔记模板"
+"在 Obsidian 里创建一个关于 [主题] 的笔记"
+"把今天的工作记录追加到日记里"
+"搜索我 Obsidian 里关于 Claude Code 的笔记"
+"查看这个笔记的所有反向链接"
 ```
 
 ---
@@ -176,37 +238,70 @@
 ### caveman
 **来源：** `JuliusBrussee/caveman`
 
-**用途：** 强制 Claude 用最简单、最直接的方案解决问题，防止过度工程化。
+**用途：** **通信压缩模式**，不是"用最简单方案"——而是让 Claude 的回复更短、更直接，减少 ~75% 无效 token。技术内容完全保留，只删冗余。
 
 **什么时候用：**
-- 你感觉 Claude 的方案太复杂了
-- 想要一个快速可用的 MVP，不需要完美架构
-- 原型验证阶段，速度优先
+- 感觉 Claude 回复太长、废话太多
+- 想节省 token 消耗
+- 快节奏调试/迭代阶段，需要简短响应
+- 不需要解释、只要结果
+
+**6 种强度：**
+
+| 强度 | 命令 | 效果 |
+|------|------|------|
+| lite | `/caveman lite` | 轻度压缩，去掉客套话 |
+| full（默认） | `/caveman` 或 `/caveman full` | 大幅压缩，片段式回复 |
+| ultra | `/caveman ultra` | 极端压缩，仅保留核心信息 |
+| wenyan-lite | `/caveman wenyan-lite` | 文言文轻度 |
+| wenyan-full | `/caveman wenyan-full` | 文言文完整 |
+| wenyan-ultra | `/caveman wenyan-ultra` | 极简文言文 |
 
 **如何触发：**
 ```
-"用最简单的方式实现这个功能"
-"caveman 模式：我只要能跑起来，不要复杂"
-"不要过度设计，给我最直接的解法"
+/caveman                       ← 启动 full 模式
+/caveman lite                  ← 轻度压缩
+/caveman ultra                 ← 极端压缩
+"stop caveman" / "normal mode" ← 关闭
 ```
+
+**自动恢复正常：** 安全警告、不可逆操作确认、多步序列（顺序关键时）——这些场景 caveman 自动暂停，说完再恢复。
+
+**不受 caveman 影响：** 代码块、commit message、PR 描述——这些始终正常书写。
 
 ---
 
 ### planning-with-files
 **来源：** `OthmanAdi/planning-with-files` | **版本：** 2.40.0
 
-**用途：** 把任务计划写入 Markdown 文件，持久化追踪执行进度，避免计划只存在于对话中丢失。
+**用途：** Manus 风格的文件化任务规划，将计划、发现和进度写入 3 个持久化 Markdown 文件，会话中断后仍可恢复。
 
-**什么时候用：**
-- 任务比较长，需要多次会话才能完成
-- 想把计划保存下来，随时查看进度
-- 多步骤任务需要明确的 checkpoint
+**3 个核心文件：**
+
+| 文件 | 用途 |
+|------|------|
+| `task_plan.md` | 任务分解、阶段、依赖关系 |
+| `findings.md` | 研究发现、代码分析结果 |
+| `progress.md` | 已完成步骤、当前状态、下一步 |
+
+**关键约束：**
+- **2-action 规则**：每轮最多执行 2 个 tool call，然后必须更新文件
+- **3-strike 协议**：同一错误出现 3 次，停止执行，汇报问题请求指示
+- **自动上下文恢复**：每次 prompt hook 触发时读取 3 个文件，无需手动交代背景
 
 **如何触发：**
 ```
+/plan-goal 实现用户认证模块    ← 启动规划模式，创建 3 个文件
+/plan-loop                      ← 继续执行循环（读文件 → 行动 → 更新文件）
+
 "把这个任务的计划写进文件"
 "创建一个实现计划并保存"
 "按照计划文件继续执行下一步"
+```
+
+**会话中断恢复：**
+```
+"继续上次的任务"  → Claude 读取 progress.md 自动恢复上下文
 ```
 
 ---
@@ -306,33 +401,54 @@
 ---
 
 ### claude-hud
-**来源：** `jarrodwatts/claude-hud`
+**来源：** `jarrodwatts/claude-hud` | **版本：** 0.1.0
 
-**用途：** 在会话中实时显示 context 使用量、活跃工具、运行中 Agent 和 token 消耗，帮助掌握会话状态。
+**用途：** 在 statusline 实时显示 4 行状态信息：模型/context 用量、工具活动、Agent 状态、Todo 进度。
+
+**4 行显示内容：**
+```
+行1（始终显示）：[Sonnet] █████░░░░░ 45% | project git:(main) | 2 CLAUDE.md | 5h: 25% | ⏱ 5m
+行2（有工具时）：◐ Edit: auth.ts | ✓ Read ×3 | ✓ Grep ×2
+行3（有 Agent 时）：◐ explore [haiku]: Finding auth code (2m 15s)
+行4（有 Todo 时）：▸ Fix authentication bug (2/5)
+```
+
+**Context 颜色阈值：**
+- 绿色 < 70%：健康
+- 黄色 70-85%：注意
+- 红色 > 85%：危险（显示 token 详细分解）
 
 **什么时候用：**
-- 长会话中想知道还剩多少 context 空间
-- 监控 token 成本
+- 长会话中监控剩余 context 空间
+- 监控 token 成本和速率限制用量
 - 调试多 Agent 并行任务时追踪状态
 
-**如何触发：** 安装后自动显示，无需手动调用。
+**如何触发：** 安装后需运行 `/claude-hud:setup` 配置 statusline，然后重启 Claude Code 自动显示。无需每次手动调用。
 
 ---
 
 ### codex
 **来源：** `openai/codex-plugin-cc`
 
-**用途：** 在 Claude Code 中调用 OpenAI Codex，将代码审查或特定任务委派给 Codex 执行，实现双模型协作。
+**用途：** 将任务**转发给 Codex CLI** 执行，通过 `node codex-companion.mjs task "<任务描述>"` 单次调用。本质是 rescue 转发器，不在 Claude 侧分析或执行任务本身。
 
 **什么时候用：**
-- 想用 Codex 的视角交叉验证 Claude 的代码
-- 特定编程任务希望对比两个模型的输出
+- 显式委派某个任务给 Codex 处理（"把这个交给 Codex"）
+- 需要 Codex 的写入能力对 repo 做修改
+- 上次 Codex 任务未完成，需要继续（`--resume`）
 
 **如何触发：**
 ```
-"用 Codex 审查一下这段代码"
-"把这个任务交给 Codex 处理"
+"用 Codex 执行这个任务：[描述]"
+"把这个 bug 修复委派给 Codex"
+"Codex 继续上次的任务"           ← 触发 --resume-last
+"Codex fresh 重新开始"           ← 触发新任务不 resume
 ```
+
+**注意：**
+- codex:codex-rescue 只调用 `task` 一次，返回原始输出，不做二次分析
+- 默认加 `--write`（写入模式）；想只读分析时需明确说"只读"
+- Claude 侧不读文件、不分析代码、不做独立判断
 
 ---
 
@@ -454,7 +570,6 @@ browser-use tunnel 3000                    # 把本地 3000 端口暴露给浏�
 
 **用法：**
 ```python
-# 安装
 # uv pip install browser-use && uvx browser-use install
 
 from browser_use import Agent
@@ -473,18 +588,38 @@ asyncio.run(main())
 **文件：** `excalidraw.md` | **来源：** `yctimlin/mcp_excalidraw`
 **调用：** `/excalidraw`
 
-**用途：** 让 Claude 生成和编辑 Excalidraw 图表（架构图、流程图、思维导图等）。
+**用途：** 通过 MCP 工具或 REST API 在本地 Excalidraw 画布上创建和编辑图表，支持实时同步、迭代修正和导出。
 
-**什么时候用：** 需要可视化系统架构、流程、数据结构。
-
-**用法：**
+**前提：** 需要运行画布服务器：
+```bash
+git clone https://github.com/yctimlin/mcp_excalidraw && cd mcp_excalidraw
+npm ci && npm run build
+PORT=3000 npm run canvas   # 然后浏览器打开 http://127.0.0.1:3000
 ```
-/excalidraw
-→ 描述你想画的图，Claude 生成 Excalidraw JSON
 
+**两种工作模式（MCP 优先）：**
+- **MCP 模式**（推荐）：工具列表中有 `excalidraw/*` 工具时直接使用
+- **REST API 模式**（回退）：调用 `http://127.0.0.1:3000` 端点
+
+**核心工作流：**
+```
+1. 规划坐标布局（x 右增，y 下增）
+2. batch_create_elements 批量创建元素 + 箭头
+3. get_canvas_screenshot 截图检查
+4. 发现问题（文字截断/重叠/箭头穿越）→ update_element 修复
+5. 确认无问题后继续下一批元素
+```
+
+**关键陷阱：**
+- 背景区域 rectangle 不要加 `text`/`label`，改用独立 text 元素放顶角
+- 跨区域箭头会形成 spaghetti，用 elbowed 路由或注解代替
+- 箭头标签 ≤ 12 字符，稀疏使用
+
+**如何触发：**
+```
 "画一个三层架构图：前端、后端、数据库"
 "把这个用户注册流程画成流程图"
-"画一个 React 组件的状态管理关系图"
+"把这段 Mermaid 转成 Excalidraw"
 ```
 
 ---
@@ -493,17 +628,30 @@ asyncio.run(main())
 **文件：** `notebooklm.md` | **来源：** `PleasePrompto/notebooklm-skill`
 **调用：** `/notebooklm`
 
-**用途：** 将内容整理为适合 NotebookLM 使用的格式，辅助知识提炼和深度研究。
+**用途：** 通过浏览器自动化操控 NotebookLM，上传内容、提问、导出摘要。
 
-**什么时候用：** 有大量资料需要整理，准备导入 NotebookLM 做进一步分析。
+**关键规则：**
+- **始终用 `python scripts/run.py <脚本路径>`** 执行脚本（绝不直接调用 Python 脚本）
+- 每次开始前先检查 auth 状态
+- 操作完成后自动进入追问循环，直到用户满意为止
 
-**用法：**
+**工作流程：**
+```bash
+# 1. 检查登录状态
+python scripts/run.py scripts/check_auth.py
+
+# 2. 上传内容并提问
+python scripts/run.py scripts/upload_and_query.py --content "内容路径" --question "问题"
+
+# 3. 导出结果
+python scripts/run.py scripts/export_summary.py
+```
+
+**如何触发：**
 ```
 /notebooklm
-→ 粘贴或描述你的资料内容，Claude 帮你结构化整理
-
-"把这篇研究报告整理成 NotebookLM 格式"
-"把这几个会议记录合并整理，准备导入 NotebookLM"
+"把这篇研究报告上传到 NotebookLM 并生成摘要"
+"用 NotebookLM 分析这几个文档的共同主题"
 ```
 
 ---
@@ -512,15 +660,30 @@ asyncio.run(main())
 **文件：** `humanizer.md` | **来源：** `blader/humanizer`
 **调用：** `/humanizer`
 
-**用途：** 将 AI 生成的文字改写得更自然、流畅，减少 AI 腔调。
+**用途：** 识别并消除 AI 写作痕迹，让文字读起来像真人写的。基于 Wikipedia "Signs of AI writing" 指南。
 
-**什么时候用：** 用 Claude 写的文案、邮件、报告读起来太"AI味"，需要更像人写的。
+**识别的 AI 写作模式（部分）：**
+- **词汇**：overuse of "delve/leverage/elevate/foster/pivotal/robust/ensure"
+- **标点**：em dash 过度使用（"this — that"）
+- **结构**：三点并列（rule of three）、被动语态、负面并列
+- **语气**：推广语言（"comprehensive/transformative/revolutionize"）、模糊归因（"studies show"）
+- **分析**：表面的 -ing 分析（"by doing X, we achieve Y"）
+- **填充**：空洞短语（"it's worth noting that"、"in today's world"）
 
-**用法：**
+**两步流程：**
+1. **扫描 + 改写**：找出 AI 模式，用自然替代方案重写
+2. **反 AI 终审**：提问"这段文字最明显的 AI 特征是什么？"→ 答题 → 再修一遍
+
+**声音匹配（可选）：**
+```
+"Humanize 这段文字。这是我的写作样本用于声音匹配：[样本]"
+"用 [文件路径] 里的风格来改写这段文字"
+```
+匹配维度：句长模式、用词层次、段落开头习惯、标点习惯。
+
+**如何触发：**
 ```
 /humanizer
-→ 把需要改写的文字发给 Claude
-
 "把这段产品介绍改写得更自然"
 "这封邮件太正式了，帮我改得口语化一点"
 "这篇报告的总结 AI 味太重，humanize 一下"
@@ -530,28 +693,53 @@ asyncio.run(main())
 
 ### pptx
 **文件：** `pptx.md` | **来源：** `anthropics/skills`
-**调用：** `/pptx`
+**调用：** `/pptx`（或提到 .pptx/deck/slides/presentation 关键词时自动触发）
 
-**用途：** 直接生成 `.pptx` PowerPoint 文件，支持结构化幻灯片内容输出。（Anthropic 官方出品）
+**用途：** 创建、编辑和分析 `.pptx` PowerPoint 文件。
 
-**什么时候用：** 需要输出一份真正可用的 PPT 文件，而不只是 Markdown 大纲。
+**自动触发条件：** 用户提到 "deck"/"slides"/"presentation"/".pptx 文件名" 时自动激活。
 
-**用法：**
+**三种操作模式：**
+
+| 场景 | 工具 | 命令 |
+|------|------|------|
+| 读取/分析内容 | markitdown | `python -m markitdown presentation.pptx` |
+| 从模板编辑 | 解包→修改→打包 | `unpack.py` → 编辑 XML → 重打包 |
+| 从零创建 | pptxgenjs | `npm install -g pptxgenjs` |
+
+**视觉检查工作流（必做）：**
+```bash
+# 转换为图片
+python scripts/office/soffice.py --headless --convert-to pdf output.pptx
+pdftoppm -jpeg -r 150 output.pdf slide
+# 生成 slide-01.jpg, slide-02.jpg...
+
+# 用 subagent 视觉检查（必须用 subagent，自己查容易漏）
+# 检查：文字溢出、元素重叠、间距不均、占位符未替换、低对比度
 ```
-/pptx
-→ 描述 PPT 的主题和内容结构
 
-"做一个 10 页的融资路演 PPT，主题是 [公司名]"
-"把这份分析报告转成 PPT 格式，8 张幻灯片"
-"生成一个季度业绩汇报的 PPT 框架"
-```
+**设计原则（避免 AI Slop PPT）：**
+- 每张幻灯片必须有视觉元素（图、图表、图标、形状）
+- 大标题 36-44pt，正文 14-16pt，不要用 Arial
+- 颜色方案不要默认蓝色，选与主题匹配的
+- **绝不在标题下加装饰线**（AI 生成 PPT 的典型特征）
 
 ---
 
 ### code-review-graph
 **文件：** `crg-*.md`（7 个）| **来源：** `tirth8205/code-review-graph`
 
-**用途：** 基于代码依赖图分析的代码审查和重构工具集，从图结构角度理解代码。
+**用途：** 基于**代码依赖知识图谱**的审查和重构工具集，从图结构角度理解变更的爆炸半径（blast radius）。
+
+**核心知识图谱工具（按需自动调用）：**
+```
+build_or_update_graph_tool(base="main")              # 构建/更新依赖图
+get_review_context_tool(base="main")                 # 获取 PR 所有变更文件
+get_impact_radius_tool(base="main")                  # 分析爆炸半径
+query_graph_tool(pattern="callers_of", target=<func>) # 查调用者
+query_graph_tool(pattern="tests_for", target=<func>)  # 查测试覆盖
+semantic_search_nodes_tool(...)                       # 语义搜索相关节点
+```
 
 **7 个子命令：**
 
@@ -559,11 +747,29 @@ asyncio.run(main())
 |------|------|---------|
 | `/crg-build-graph` | 构建代码依赖图，可视化模块关系 | "为这个项目构建依赖图" |
 | `/crg-explore-codebase` | 图式探索代码库，快速理解陌生项目 | "帮我了解这个项目的结构" |
-| `/crg-review-pr` | PR 级别全面代码审查 | "审查这个 PR 的所有改动" |
+| `/crg-review-pr` | PR 级别全面代码审查，输出结构化报告 | "审查这个 PR 的所有改动" |
 | `/crg-review-changes` | 针对当前变更的审查 | "检查我刚写的这些改动" |
 | `/crg-review-delta` | 增量差异对比审查 | "对比上个版本，分析新增的问题" |
 | `/crg-debug-issue` | 利用依赖图定位 bug 根源 | "这个 bug 影响了哪些模块" |
 | `/crg-refactor-safely` | 分析影响范围，给出安全重构建议 | "我想重构这个模块，有哪些风险" |
+
+**`/crg-review-pr` 输出格式：**
+```
+## PR Review: <标题>
+
+### Risk Assessment
+- Overall risk: Low / Medium / High
+- Blast radius: X files, Y functions impacted
+- Test coverage: N changed functions covered / M total
+
+### File-by-File Review
+#### <file_path>
+- Changes: <描述>
+- Impact: <依赖此文件的模块>
+- Issues: <bug/规范/隐患>
+
+### Missing Tests / Recommendations
+```
 
 ---
 
