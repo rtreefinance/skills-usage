@@ -1,5 +1,15 @@
 # Skills 安装记录
 
+## 2026-05-23（第三批）
+
+### 新增 Slash Commands
+| Skill | 文件 | 来源 |
+|-------|------|------|
+| multi-stage-dockerfile | `multi-stage-dockerfile.md` | github/awesome-copilot |
+| shadcn | `shadcn.md` | shadcn/ui（官方，自动触发） |
+
+---
+
 ## 2026-05-22（第二批）
 
 ### 新增 Plugins
