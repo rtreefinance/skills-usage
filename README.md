@@ -1,6 +1,6 @@
 # Claude Code Skills 使用手册
 
-> 最后更新：2026-05-23 | 共 29 个 Skills（12 Plugin + 17 Slash Command）
+> 最后更新：2026-05-23 | 共 31 个 Skills（12 Plugin + 19 Slash Command）
 
 ---
 
@@ -30,6 +30,8 @@
 | 把 AI 文字改写得更自然 | [/humanizer](#humanizer) |
 | 生成 PowerPoint 文件 | [/pptx](#pptx) |
 | 分析代码依赖图 / 重构 | [/crg-*](#code-review-graph) |
+| 生成优化的多阶段 Dockerfile | [/multi-stage-dockerfile](#multi-stage-dockerfile) |
+| shadcn/ui 组件管理 | [shadcn](#shadcn)（自动触发） |
 
 ---
 
@@ -769,6 +771,64 @@ semantic_search_nodes_tool(...)                       # 语义搜索相关节点
 - Issues: <bug/规范/隐患>
 
 ### Missing Tests / Recommendations
+```
+
+---
+
+
+### multi-stage-dockerfile
+**文件：** `multi-stage-dockerfile.md` | **来源：** `github/awesome-copilot`
+**调用：** `/multi-stage-dockerfile`
+
+**用途：** 为任意语言或框架生成优化的多阶段 Dockerfile，减小镜像体积、提升构建缓存效率。
+
+**什么时候用：**
+- 需要为项目写 Dockerfile 且不熟悉最佳实践
+- 想优化现有 Dockerfile（镜像太大、构建慢）
+- 多阶段构建分离 build 和 runtime 环境
+
+**如何触发：**
+```
+/multi-stage-dockerfile
+"给这个 Node.js 项目写一个多阶段 Dockerfile"
+"优化一下这个 Dockerfile，镜像太大了"
+"给 Python FastAPI 应用生成 Dockerfile"
+```
+
+---
+
+### shadcn
+**文件：** `shadcn.md` | **来源：** `shadcn/ui`（官方）
+**调用：** 自动触发（`user-invocable: false`）
+
+**用途：** 管理 shadcn/ui 组件——添加、搜索、调试、样式定制、组合 UI。自动读取项目 config 和已安装组件列表。
+
+**自动触发条件：**
+- 项目存在 `components.json`
+- 提到 "shadcn"、"shadcn/ui"、组件名（Button/Card/Dialog 等）
+- 执行 `shadcn init` 或 `--preset` 相关操作
+
+**常用操作：**
+```bash
+# 添加组件（自动用项目的包管理器）
+npx shadcn@latest add button
+npx shadcn@latest add card dialog form
+
+# 查看组件文档
+npx shadcn@latest docs button
+
+# 初始化项目
+npx shadcn@latest init
+
+# 查看当前项目配置和已安装组件
+npx shadcn@latest info --json
+```
+
+**如何触发：**
+```
+"给这个页面加一个 shadcn 的 Dialog 组件"
+"用 shadcn Card 实现这个布局"
+"初始化 shadcn/ui 到这个项目"
 ```
 
 ---
